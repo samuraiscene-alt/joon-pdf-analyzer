@@ -1,6 +1,6 @@
 # JOON PDF ANALYZER
 
-독립 부동산 경매 문서 판독 테스트 PWA — v0.6.0
+독립 부동산 경매 문서 판독 테스트 PWA — v0.6.1
 
 ## 기능
 - 일반 PDF 문자/좌표 추출: PDF.js
