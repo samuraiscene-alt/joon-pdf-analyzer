@@ -11,6 +11,8 @@ export function analyzeDocumentBatch(selected,pages) {
   analysis.keywords=findAuctionTerms(own);
   analysis.keywordSummary=summarizeAuctionTerms(analysis.keywords);
   analysis.rightStatements=findRightStatements(own);
+  analysis.geometryTenantCandidates=own.flatMap(p=>(p.tenantGrid?.candidates||[]).map(x=>({...x,source:{...x.source,sourceId:p.sourceId,sourcePage:p.sourcePage,sourceFile:p.sourceFile}})));
+  analysis.geometryTablePages=own.filter(p=>p.tenantGrid?.status==='candidate-only').map(p=>({sourcePage:p.sourcePage,sourceFile:p.sourceFile,candidateCount:p.tenantGrid.candidates.length}));
   analysis.scannedPages=own.filter(p=>p.ocr?.engine==='tesseract.js').length;
   analysis.tableCandidates=own.reduce((n,p)=>n+(p.tables?.length||0),0);
   analysis.provenanceWarning='표 복원 및 법적 판단 미검증: 원본 대조 필수';
