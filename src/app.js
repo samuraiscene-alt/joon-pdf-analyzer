@@ -1,5 +1,6 @@
 import {makeAuctionHandoff} from './tenant-review.js';
 import {textQuality} from './tenant-candidates.js';
+import {analyzeDocumentBatch,batchSummary} from './document-batches.js';
 import {buildBlindReport,validationSummary} from './validation-report.js';
 import {analyzePages,itemsToLines} from './analyzer.js';
 import {findAuctionTerms} from './keywords.js';
@@ -35,6 +36,25 @@ async function pdfPages(file){
  return pages;
 }
 function renderOverview(data){
+ const docs=data.documents||[];
+ if(docs.length){
+  const heading=document.createElement('h3');heading.textContent='문서별 독립 분석 결과';$('overview').append(heading);
+  for(const d of docs){
+   const card=document.createElement('details');card.open=docs.length<=2;
+   const title=document.createElement('summary');title.textContent=`${d.filename} · ${d.pageCount}쪽 · 사건번호 ${d.caseNumber||'미확인'} · 임차인 후보 ${(d.analysis.tenantCandidates||[]).length}건`;
+   card.append(title);
+   const review=document.createElement('div');review.className='tenant-list';
+   const rows=[`표 복원 ${d.analysis.tableCandidates}개 · OCR ${d.analysis.scannedPages}쪽`,
+    `경매 단어 언급 ${(d.analysis.keywords||[]).length}회 · 고유 용어 ${(d.analysis.keywordSummary||[]).length}종 (권리 개수 아님)`,
+    `권리 관련 문구 ${(d.analysis.rightStatements||[]).length}건 (법적 판단 아님)`];
+   for(const row of rows){const p=document.createElement('p');p.textContent=row;review.append(p);}
+   for(const t of d.analysis.tenantCandidates||[]){const p=document.createElement('p');p.textContent=`임차인 검토 후보: ${t.name} · ${t.amountCandidates.join(', ')||'금액 불명'} · ${t.source.sourcePage}쪽 · 원본 확인 필요`;review.append(p);}
+   const notes=document.createElement('details'),label=document.createElement('summary'),pre=document.createElement('pre');
+   label.textContent='권리 관련 원문 · 출처 및 분류';pre.textContent=JSON.stringify(d.analysis.rightStatements||[],null,2);notes.append(label,pre);review.append(notes);
+   card.append(review);$('overview').append(card);
+  }
+ }
+
  const area=$('overview'),report=buildBlindReport(data),v=validationSummary(report);
  const header=document.createElement('div');header.className='overview-head';header.textContent=`${v.pages}쪽 분석 · 임차인 수 ${v.countLabel} · 표에서 추출한 기록 ${v.tenantRows}건 · 확인 필요 ${v.unresolvedCount}건`;
  area.append(header);
@@ -66,16 +86,25 @@ $('files').addEventListener('change',async()=>{
   a.provenanceWarning='표 복원은 후보 단계입니다. 다중행·병합 셀과 법률 판단은 사람의 원본 검증이 필요합니다.';
   a.scannedPages=pages.filter(p=>p.ocr?.engine==='tesseract.js').length;
   a.tableCandidates=pages.reduce((n,p)=>n+(p.tables?.length||0),0);
-  current={files,selected,pages,analysis:a};output.textContent=JSON.stringify(a,null,2);renderOverview(current);$('save').disabled=false;$('export').disabled=false;$('handoff').disabled=false;$('blind').disabled=false;
+  const documents=analyzeDocumentBatch(selected,pages);
+  const batch=batchSummary(documents);
+  a.documents=documents.map(({sourceId,filename,pageCount,caseNumber,analysis})=>({sourceId,filename,pageCount,caseNumber,analysis}));
+  a.batch=batch;
+  if(!batch.caseNumber)a.caseNumber=null;
+  current={files,selected,pages,analysis:a,documents,batch};output.textContent=JSON.stringify({batch,documents:a.documents},null,2);renderOverview(current);$('save').disabled=false;$('export').disabled=false;$('handoff').disabled=false;$('blind').disabled=false;
   tell(`${pages.length}쪽 · 표 후보 ${a.tableCandidates}개 · OCR ${a.scannedPages}쪽 · 확인 필요`);
  }catch(e){tell('판독 실패: '+e.message);}
 });
 $('blind').addEventListener('click',async()=>{if(!current)return;try{tell('원본 파일 해시 계산 중…');const sourceHashes=await Promise.all(current.files.map(sha256Blob));const report=buildBlindReport({...current,sourceHashes});downloadJson(report,'joon-blind-test-'+Date.now()+'.json');tell('앱 자체 판독 결과를 정답 없는 상태로 내보냈습니다 ✓');}catch(e){tell('검증 보고서 생성 실패: '+e.message);}});
-$('handoff').addEventListener('click',()=>{if(!current)return;downloadJson(makeAuctionHandoff(current.analysis),'joon-auction-handoff.json');});
+$('handoff').addEventListener('click',()=>{if(!current)return;
+ const entries=current.documents.map(d=>({sourceId:d.sourceId,filename:d.filename,handoff:makeAuctionHandoff(d.analysis,{filename:d.filename})}));
+ downloadJson({format:'joon-handoff-batch',schemaVersion:'1.0',mode:'review-only',automaticOverwrite:false,documents:entries},'joon-auction-handoff-review.json');
+});
 $('save').addEventListener('click',async()=>{
  if(!current)return;
  try{
-  for(const {file:f,sourceId} of current.selected){const pages=pagesForSource(current.pages,sourceId);const analysis=analyzePages(pages);analysis.keywords=findAuctionTerms(pages);analysis.provenanceWarning=current.analysis.provenanceWarning;
+  for(const {file:f,sourceId} of current.selected){const pages=pagesForSource(current.pages,sourceId);const analysis=current.documents.find(d=>d.sourceId===sourceId)?.analysis;
+   if(!analysis)throw new Error('분리된 문서 분석 결과를 찾을 수 없습니다.');
    const sourceHash=await sha256Blob(f);
    await saveDocument({filename:f.name,mimeType:f.type,blob:f,pages,analysis,sourceHash});}
   tell('원본 + 각 파일별 분석 저장 완료 ✓');await refresh();
