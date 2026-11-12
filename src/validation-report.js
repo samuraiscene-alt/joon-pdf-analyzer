@@ -4,7 +4,7 @@ export function buildBlindReport({analysis,pages=[],files=[],sourceHashes=[]},no
  if(!analysis||typeof analysis!=='object')throw new TypeError('analysis required');
  return {
   format:'joon-blind-validation',schemaVersion:VALIDATION_SCHEMA,createdAt:now,
-  engineVersion:'0.6.2',status:'앱 자체 판독 결과 · 정답 대조 전',
+  engineVersion:'0.6.3',status:'앱 자체 판독 결과 · 정답 대조 전',
   files:files.map((f,i)=>({name:f.name,type:f.type||null,size:f.size??null,sha256:sourceHashes[i]??null})),
   summary:{pageCount:pages.length,caseNumber:analysis.caseNumber||null,
     tenantCount:analysis.tenantCount??null,tenantRows:(analysis.tenants||[]).length,tenantCandidateRows:(analysis.tenantCandidates||[]).length,
