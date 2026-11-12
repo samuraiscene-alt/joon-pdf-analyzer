@@ -1,4 +1,5 @@
 import {createTenantReview} from './tenant-review.js';
+import {findTenantCandidates} from './tenant-candidates.js';
 /**
  * JOON PDF ANALYZER v0.1.0
  * Provider-neutral analysis API. Does NOT infer legal priority or acquisition of debt.
@@ -41,6 +42,7 @@ export function analyzePages(pages) {
     }
   }
   const tenantReview=createTenantReview(tenants);
+  const tenantCandidates=findTenantCandidates(pages);
   const distinctNames=[...new Set(tenants.map(x=>x.name))];
   const collisions = distinctNames.filter(n=>tenants.filter(x=>x.name===n).length>1);
   if(collisions.length) unresolved.push({reason:'동명이인 또는 복수 기록 여부 확인 필요',names:collisions});
@@ -49,7 +51,7 @@ export function analyzePages(pages) {
   return {
     schemaVersion:'0.5', caseNumber:caseMatch?normalize(caseMatch[1]).replace(/\s/g,''):null,
     tenantCount:{value:unresolved.length?null:distinctNames.length,status:unresolved.length?'검증 필요':'잠정 추출',minObserved:distinctNames.length},
-    tenants, tenantReview, risks:riskMentions, tablesDetected:tables.length,
+    tenants, tenantReview, tenantCandidates, risks:riskMentions, tablesDetected:tables.length,
     unresolved, observations:{money:[...new Set((all.match(rxWon)||[]))],dates:[...new Set((all.match(rxDate)||[]))]},
     status:'법적 판단 보류', evidenceCount:evidence.length
   };
