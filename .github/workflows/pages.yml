@@ -19,6 +19,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Set up Node for regression tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test isolated document analyzer
+        run: npm test
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload static files
