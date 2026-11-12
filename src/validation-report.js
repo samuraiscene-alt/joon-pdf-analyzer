@@ -4,7 +4,7 @@ export function buildBlindReport({analysis,pages=[],files=[],sourceHashes=[]},no
  if(!analysis||typeof analysis!=='object')throw new TypeError('analysis required');
  return {
   format:'joon-blind-validation',schemaVersion:VALIDATION_SCHEMA,createdAt:now,
-  engineVersion:'0.6.1',status:'앱 자체 판독 결과 · 정답 대조 전',
+  engineVersion:'0.6.2',status:'앱 자체 판독 결과 · 정답 대조 전',
   files:files.map((f,i)=>({name:f.name,type:f.type||null,size:f.size??null,sha256:sourceHashes[i]??null})),
   summary:{pageCount:pages.length,caseNumber:analysis.caseNumber||null,
     tenantCount:analysis.tenantCount??null,tenantRows:(analysis.tenants||[]).length,tenantCandidateRows:(analysis.tenantCandidates||[]).length,
@@ -12,6 +12,11 @@ export function buildBlindReport({analysis,pages=[],files=[],sourceHashes=[]},no
     scannedPages:analysis.scannedPages||0,tableCandidates:analysis.tableCandidates||0},
   tenants:analysis.tenants||[],tenantReview:analysis.tenantReview||[],tenantCandidates:analysis.tenantCandidates||[],
   findings:analysis.keywords||[],unresolved:analysis.unresolved||[],
+  documents:(analysis.documents||[]).map(d=>({sourceId:d.sourceId,filename:d.filename,caseNumber:d.caseNumber,pageCount:d.pageCount,
+    tenantCandidates:d.analysis?.tenantCandidates||[],rightStatements:d.analysis?.rightStatements||[],
+    keywordSummary:d.analysis?.keywordSummary||[],unresolved:d.analysis?.unresolved||[],
+    tenantCount:d.analysis?.tenantCount||null})),
+  batch:analysis.batch||null,
   sources:pages.map(p=>({sourceId:p.sourceId,filename:p.sourceFile,sourcePage:p.sourcePage,page:p.page,
     ocr:p.ocr??null,lines:(p.lines||[]).map((l,i)=>({line:i+1,text:l.text,bbox:l.bbox||null,confidence:l.confidence??null}))})),
   groundTruth:null,comparison:null,reviewStatus:'not-reviewed',
