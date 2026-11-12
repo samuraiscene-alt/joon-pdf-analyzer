@@ -1,0 +1,10 @@
+{
+  "name": "joon-pdf-analyzer",
+  "version": "0.6.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "description": "Standalone court PDF extraction validation PWA. Not legal advice."
+}
