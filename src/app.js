@@ -1,4 +1,5 @@
 import {makeAuctionHandoff} from './tenant-review.js';
+import {textQuality} from './tenant-candidates.js';
 import {buildBlindReport,validationSummary} from './validation-report.js';
 import {analyzePages,itemsToLines} from './analyzer.js';
 import {findAuctionTerms} from './keywords.js';
@@ -17,7 +18,8 @@ async function pdfPages(file){
  for(let i=1;i<=pdf.numPages;i++){
   const page=await pdf.getPage(i),items=(await page.getTextContent()).items;
   const lines=itemsToLines(items);
-  if(lines.map(x=>x.text).join('').replace(/\s/g,'').length>=30){
+  const quality=textQuality(lines);
+  if(lines.map(x=>x.text).join('').replace(/\s/g,'').length>=30&&!quality.needsOCR){
    pages.push({page:i,lines,tables:reconstructTableCandidates(items,i),ocr:{engine:'pdfjs',tableRecognition:'candidate-only',reviewRequired:true}});
   }else{
    tell(`${file.name} ${i}/${pdf.numPages}쪽 스캔 OCR 중…`);
@@ -26,7 +28,7 @@ async function pdfPages(file){
    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
    if(!blob)throw Error('스캔 페이지 이미지 생성 실패');
    const scanned=await imageToPage(blob,i,n=>tell(`${file.name} ${i}쪽 OCR ${n}%`));
-   pages.push(scanned);
+   pages.push({...scanned,ocr:{...scanned.ocr,reason:quality.reason,originalPdfTextHadBrokenGlyphs:quality.needsOCR}});
    canvas.width=0;canvas.height=0;
   }
  }
@@ -38,6 +40,11 @@ function renderOverview(data){
  area.append(header);
  const disclaimer=document.createElement('p');disclaimer.className='warn';disclaimer.textContent='표에서 추출된 기록 수는 실제 임차인 수와 다릅니다. 미확정은 정상적인 안전 표시입니다.';area.append(disclaimer);
  const listing=document.createElement('div');listing.className='tenant-list';
+ const candidateHeading=document.createElement('h3');candidateHeading.textContent='원문에서 발견된 임차인 검토 후보 (인원 확정 아님)';area.append(candidateHeading);
+ const candidateList=document.createElement('div');candidateList.className='tenant-list';
+ if(!(data.analysis.tenantCandidates||[]).length){const p=document.createElement('p');p.textContent='추출된 임차인 후보 없음';candidateList.append(p);}
+ for(const t of data.analysis.tenantCandidates||[]){const item=document.createElement('div');item.className='record';item.textContent=`${t.name} · 금액 후보 ${t.amountCandidates.join(', ')||'미확인'} · 날짜 후보 ${t.dateCandidates.join(', ')||'미확인'} · 출처 ${t.source.sourceFile||'?'} ${t.source.sourcePage}쪽 ${t.source.line}행 · 원본 대조 필수`;candidateList.append(item);}
+ area.append(candidateList);
  if(!data.analysis.tenants?.length){const p=document.createElement('p');p.textContent='임차인 표에서 확정적으로 연결된 기록 없음 — 원본 검증 필요';listing.append(p);}
  for(const t of data.analysis.tenants||[]){const item=document.createElement('div');item.className='record';item.textContent=`${t.name} · 보증금 ${t.deposit||'미확인'} · 전입 ${t.moveIn||'미확인'} · 확정일자 ${t.fixedDate||'미확인'} · 배당요구 ${t.distributionRequest||'미확인'} · 근거 ${t.source?.page||'?'}쪽`;listing.append(item);}
  area.append(listing);
