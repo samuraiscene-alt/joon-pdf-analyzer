@@ -14,11 +14,12 @@ export function buildBlindReport({analysis,pages=[],files=[],sourceHashes=[]},no
   findings:analysis.keywords||[],unresolved:analysis.unresolved||[],
   documents:(analysis.documents||[]).map(d=>({sourceId:d.sourceId,filename:d.filename,caseNumber:d.caseNumber,pageCount:d.pageCount,
     tenantCandidates:d.analysis?.tenantCandidates||[],rightStatements:d.analysis?.rightStatements||[],
-    keywordSummary:d.analysis?.keywordSummary||[],unresolved:d.analysis?.unresolved||[],
+    keywordSummary:d.analysis?.keywordSummary||[],geometryTenantCandidates:d.analysis?.geometryTenantCandidates||[],
+    geometryTablePages:d.analysis?.geometryTablePages||[],unresolved:d.analysis?.unresolved||[],
     tenantCount:d.analysis?.tenantCount||null})),
   batch:analysis.batch||null,
   sources:pages.map(p=>({sourceId:p.sourceId,filename:p.sourceFile,sourcePage:p.sourcePage,page:p.page,
-    ocr:p.ocr??null,lines:(p.lines||[]).map((l,i)=>({line:i+1,text:l.text,bbox:l.bbox||null,confidence:l.confidence??null}))})),
+    ocr:p.ocr??null,tenantGrid:p.tenantGrid??null,positionedTokens:p.positionedTokens??[],lines:(p.lines||[]).map((l,i)=>({line:i+1,text:l.text,bbox:l.bbox||null,confidence:l.confidence??null}))})),
   groundTruth:null,comparison:null,reviewStatus:'not-reviewed',
   caveat:'표 후보, 임차인 수 및 권리관계는 원본 확인 전까지 미확정'
  };
