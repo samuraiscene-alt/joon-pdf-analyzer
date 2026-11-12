@@ -6,6 +6,7 @@ import {analyzePages,itemsToLines} from './analyzer.js';
 import {findAuctionTerms} from './keywords.js';
 import {imageToPage,isSupportedImage} from './ocr.js';
 import {reconstructTableCandidates} from './table-layout.js';
+import {captureTextTokens,reconstructTenantGrid} from './tenant-grid.js';
 import {assignFileIds,pagesForSource,sha256Blob} from './file-identity.js';
 import {saveDocument,listDocuments,deleteDocument,exportAnalysis,downloadJson} from './records.js';
 const $=id=>document.getElementById(id),status=$('status'),output=$('result'),pagesBox=$('pages'),recordsBox=$('records');
@@ -19,9 +20,11 @@ async function pdfPages(file){
  for(let i=1;i<=pdf.numPages;i++){
   const page=await pdf.getPage(i),items=(await page.getTextContent()).items;
   const lines=itemsToLines(items);
+  const positionedTokens=captureTextTokens(items);
+  const tenantGrid=reconstructTenantGrid(positionedTokens,{sourcePage:i});
   const quality=textQuality(lines);
   if(lines.map(x=>x.text).join('').replace(/\s/g,'').length>=30&&!quality.needsOCR){
-   pages.push({page:i,lines,tables:reconstructTableCandidates(items,i),ocr:{engine:'pdfjs',tableRecognition:'candidate-only',reviewRequired:true}});
+   pages.push({page:i,lines,positionedTokens,tenantGrid,tables:reconstructTableCandidates(items,i),ocr:{engine:'pdfjs',tableRecognition:'candidate-only',reviewRequired:true}});
   }else{
    tell(`${file.name} ${i}/${pdf.numPages}쪽 스캔 OCR 중…`);
    const viewport=page.getViewport({scale:2});const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
@@ -29,7 +32,7 @@ async function pdfPages(file){
    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
    if(!blob)throw Error('스캔 페이지 이미지 생성 실패');
    const scanned=await imageToPage(blob,i,n=>tell(`${file.name} ${i}쪽 OCR ${n}%`));
-   pages.push({...scanned,ocr:{...scanned.ocr,reason:quality.reason,originalPdfTextHadBrokenGlyphs:quality.needsOCR}});
+   pages.push({...scanned,positionedTokens,tenantGrid,ocr:{...scanned.ocr,reason:quality.reason,originalPdfTextHadBrokenGlyphs:quality.needsOCR}});
    canvas.width=0;canvas.height=0;
   }
  }
@@ -46,8 +49,10 @@ function renderOverview(data){
    const review=document.createElement('div');review.className='tenant-list';
    const rows=[`표 복원 ${d.analysis.tableCandidates}개 · OCR ${d.analysis.scannedPages}쪽`,
     `경매 단어 언급 ${(d.analysis.keywords||[]).length}회 · 고유 용어 ${(d.analysis.keywordSummary||[]).length}종 (권리 개수 아님)`,
-    `권리 관련 문구 ${(d.analysis.rightStatements||[]).length}건 (법적 판단 아님)`];
+    `권리 관련 문구 ${(d.analysis.rightStatements||[]).length}건 (법적 판단 아님)`,
+    `좌표 기반 임차인 후보 ${(d.analysis.geometryTenantCandidates||[]).length}건 (표 연결 미확정)`];
    for(const row of rows){const p=document.createElement('p');p.textContent=row;review.append(p);}
+   for(const t of d.analysis.geometryTenantCandidates||[]){const p=document.createElement('p');p.textContent=`좌표 기반 후보: ${t.name} · 금액 후보 ${(t.amountCandidates||[]).join(', ')||'불명'} · 원본 ${t.source?.sourcePage||'?'}쪽 · 검증 필요`;review.append(p);}
    for(const t of d.analysis.tenantCandidates||[]){const p=document.createElement('p');p.textContent=`임차인 검토 후보: ${t.name} · ${t.amountCandidates.join(', ')||'금액 불명'} · ${t.source.sourcePage}쪽 · 원본 확인 필요`;review.append(p);}
    const notes=document.createElement('details'),label=document.createElement('summary'),pre=document.createElement('pre');
    label.textContent='권리 관련 원문 · 출처 및 분류';pre.textContent=JSON.stringify(d.analysis.rightStatements||[],null,2);notes.append(label,pre);review.append(notes);
@@ -80,7 +85,8 @@ $('files').addEventListener('change',async()=>{
    if(f.type==='application/pdf'||/\.pdf$/i.test(f.name))parts=await pdfPages(f);
    else if(isSupportedImage(f))parts=[await imageToPage(f,1,n=>tell(`${f.name} OCR ${n}%`))];
    else throw Error('지원하지 않는 형식: '+f.name+' (HEIC은 JPEG로 변환)');
-   for(const p of parts){const item={...p,page:pages.length+1,sourceId,sourceFile:f.name,sourcePage:p.page};pages.push(item);showPage(item,`${f.name} ${p.page}쪽`);}
+   for(const p of parts){const item={...p,page:pages.length+1,sourceId,sourceFile:f.name,sourcePage:p.page,
+    tenantGrid:p.tenantGrid?{...p.tenantGrid,sourceId,sourceFile:f.name,sourcePage:p.page}:null};pages.push(item);showPage(item,`${f.name} ${p.page}쪽`);}
   }
   const a=analyzePages(pages);a.keywords=findAuctionTerms(pages);
   a.provenanceWarning='표 복원은 후보 단계입니다. 다중행·병합 셀과 법률 판단은 사람의 원본 검증이 필요합니다.';
